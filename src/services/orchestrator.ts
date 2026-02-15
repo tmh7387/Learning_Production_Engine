@@ -2,6 +2,7 @@ import { createServiceClient } from '@/lib/supabase/server';
 import { GeminiVideoService } from '@/services/gemini/videoAnalysis';
 import { GeminiDocumentService } from '@/services/gemini/documentAnalysis';
 import { ClaudeLessonService } from '@/services/claude/lessonGeneration';
+import { NotebookLMService } from '@/services/notebooklm/notebookService';
 import { YouTubeService } from '@/services/sources/youtube';
 import { GeneratedLesson } from '@/types/lessons';
 import { SourceAnalysis } from '@/types/analysis';
@@ -13,12 +14,14 @@ export class PipelineOrchestrator {
     private geminiVideo: GeminiVideoService;
     private geminiDocument: GeminiDocumentService;
     private claudeLesson: ClaudeLessonService;
+    private notebookLM: NotebookLMService;
 
     constructor() {
         this.supabase = createServiceClient();
         this.geminiVideo = new GeminiVideoService();
         this.geminiDocument = new GeminiDocumentService();
         this.claudeLesson = new ClaudeLessonService();
+        this.notebookLM = new NotebookLMService();
     }
 
     /**
@@ -60,7 +63,21 @@ export class PipelineOrchestrator {
             onStatus?.('Saving lesson plan...');
             const courseId = await this.saveLesson(lesson, source.id, organizationId);
 
-            // Step 7: Mark complete
+            // Step 7: Create NotebookLM notebook
+            onStatus?.('Preparing NotebookLM notebook...');
+            try {
+                await this.notebookLM.createNotebookForCourse(
+                    { id: courseId, title: lesson.course.title, description: lesson.course.description },
+                    analysis,
+                    sourceUrl,
+                    sourceType
+                );
+            } catch (nbError) {
+                // Non-fatal — log and continue
+                console.error('[Pipeline] NotebookLM creation failed (non-fatal):', nbError);
+            }
+
+            // Step 8: Mark complete
             await this.updateSourceStatus(source.id, 'completed');
             onStatus?.('Complete!');
 

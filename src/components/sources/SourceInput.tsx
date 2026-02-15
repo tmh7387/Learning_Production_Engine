@@ -11,7 +11,7 @@ interface SourceInputProps {
     onLessonGenerated: (courseId: string) => void;
 }
 
-type InputMethod = 'url' | 'file';
+type InputMethod = 'url' | 'file' | 'notebook';
 type ProcessingStep = 'idle' | 'uploading' | 'analyzing' | 'generating' | 'complete';
 
 const STEP_LABELS: Record<ProcessingStep, string> = {
@@ -27,6 +27,8 @@ export function SourceInput({ onLessonGenerated }: SourceInputProps) {
     const [inputMethod, setInputMethod] = useState<InputMethod>('url');
     const [url, setUrl] = useState('');
     const [file, setFile] = useState<File | null>(null);
+    const [notebookId, setNotebookId] = useState('');
+    const [notebookContent, setNotebookContent] = useState('');
     const [step, setStep] = useState<ProcessingStep>('idle');
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -57,7 +59,7 @@ export function SourceInput({ onLessonGenerated }: SourceInputProps) {
                 setStep('complete');
                 toast.success('Lesson plan generated successfully!');
                 onLessonGenerated(data.courseId);
-            } else {
+            } else if (inputMethod === 'file') {
                 if (!file) {
                     toast.error('Please select a file');
                     return;
@@ -100,6 +102,37 @@ export function SourceInput({ onLessonGenerated }: SourceInputProps) {
                 setStep('complete');
                 toast.success('Lesson plan generated successfully!');
                 onLessonGenerated(analyzeData.courseId);
+            } else if (inputMethod === 'notebook') {
+                // NotebookLM source
+                if (!notebookId.trim() || !notebookContent.trim()) {
+                    toast.error('Please enter both a Notebook ID and content');
+                    return;
+                }
+
+                setStep('analyzing');
+
+                const res = await fetch('/api/sources/from-notebook', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        notebookId: notebookId.trim(),
+                        organizationId: 'default',
+                        notebookContent: {
+                            title: `NotebookLM: ${notebookId.trim()}`,
+                            text: notebookContent,
+                        },
+                    }),
+                });
+
+                const data = await res.json();
+
+                if (!res.ok) {
+                    throw new Error(data.error || 'Notebook processing failed');
+                }
+
+                setStep('complete');
+                toast.success('Lesson plan generated from NotebookLM!');
+                onLessonGenerated(data.courseId);
             }
         } catch (error) {
             setStep('idle');
@@ -125,6 +158,8 @@ export function SourceInput({ onLessonGenerated }: SourceInputProps) {
     const reset = () => {
         setUrl('');
         setFile(null);
+        setNotebookId('');
+        setNotebookContent('');
         setStep('idle');
         setIsOpen(false);
     };
@@ -205,6 +240,15 @@ export function SourceInput({ onLessonGenerated }: SourceInputProps) {
                             >
                                 Upload File
                             </button>
+                            <button
+                                onClick={() => setInputMethod('notebook')}
+                                className={`flex-1 rounded-md py-2 text-sm font-medium transition-all ${inputMethod === 'notebook'
+                                    ? 'bg-white text-primary-700 shadow-sm'
+                                    : 'text-gray-500 hover:text-gray-700'
+                                    }`}
+                            >
+                                NotebookLM
+                            </button>
                         </div>
 
                         {/* URL input */}
@@ -269,6 +313,36 @@ export function SourceInput({ onLessonGenerated }: SourceInputProps) {
                                     onChange={handleFileChange}
                                     className="hidden"
                                 />
+                            </div>
+                        )}
+
+                        {/* NotebookLM input */}
+                        {inputMethod === 'notebook' && (
+                            <div className="space-y-4">
+                                <Input
+                                    label="NotebookLM Notebook ID"
+                                    placeholder="Enter the notebook UUID"
+                                    value={notebookId}
+                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNotebookId(e.target.value)}
+                                    helperText="The UUID of the NotebookLM notebook to use as source"
+                                />
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Notebook Content
+                                    </label>
+                                    <textarea
+                                        value={notebookContent}
+                                        onChange={(e) => setNotebookContent(e.target.value)}
+                                        placeholder="Paste the notebook content or query results here..."
+                                        rows={8}
+                                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm
+                                            focus:border-primary-500 focus:ring-2 focus:ring-primary-200
+                                            transition-all duration-200 resize-none"
+                                    />
+                                    <p className="mt-1 text-xs text-gray-500">
+                                        Paste content from NotebookLM to generate an IATA lesson plan
+                                    </p>
+                                </div>
                             </div>
                         )}
 
