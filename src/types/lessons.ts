@@ -52,6 +52,9 @@ export interface GeneratedLesson {
     course: {
         title: string;
         description: string;
+        course_code?: string;
+        iata_category?: string;
+        total_duration_minutes?: number;
     };
     modules: Array<{
         moduleNumber: number;
@@ -62,12 +65,19 @@ export interface GeneratedLesson {
             type: ObjectiveType;
             content: string;
             bloomsLevel: BloomsLevel;
+            sourceIds?: string[];
             activities: Array<{
                 instructionMethod: string;
                 description: string;
                 duration: string;
                 resources: string;
+                sourceIds?: string[];
             }>;
         }>;
     }>;
+    metadata?: {
+        collectionId?: string;
+        sourcesUsed?: string[];
+        synthesisStrategy?: string;
+    };
 }

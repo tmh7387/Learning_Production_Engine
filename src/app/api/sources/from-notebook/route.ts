@@ -82,7 +82,8 @@ export async function POST(request: NextRequest) {
             // Step 3: Generate lesson plan with Claude
             const claudeService = new ClaudeLessonService();
             const lesson = await claudeService.generateLesson(
-                analysisData,
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                analysisData as any,
                 notebookContent.title || 'NotebookLM Source'
             );
 

@@ -53,7 +53,8 @@ export function SourceInput({ onLessonGenerated }: SourceInputProps) {
                 const data = await res.json();
 
                 if (!res.ok) {
-                    throw new Error(data.error || 'Analysis failed');
+                    console.error('[SourceInput] Analysis failed with data:', data);
+                    throw new Error(data.details || data.error || 'Analysis failed');
                 }
 
                 setStep('complete');
@@ -96,7 +97,8 @@ export function SourceInput({ onLessonGenerated }: SourceInputProps) {
                 const analyzeData = await analyzeRes.json();
 
                 if (!analyzeRes.ok) {
-                    throw new Error(analyzeData.error || 'Analysis failed');
+                    console.error('[SourceInput] Analysis failed with data:', analyzeData);
+                    throw new Error(analyzeData.details || analyzeData.error || 'Analysis failed');
                 }
 
                 setStep('complete');

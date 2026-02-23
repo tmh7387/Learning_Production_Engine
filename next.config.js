@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+    distDir: '.next-build',
     experimental: {
         serverActions: {
             bodySizeLimit: '50mb',

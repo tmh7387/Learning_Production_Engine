@@ -15,15 +15,15 @@ export class GeminiVideoService {
     }
 
     /**
-     * Analyzes a YouTube video using Gemini's native video understanding.
-     * Gemini 1.5 Pro can process YouTube URLs directly.
+     * Analyzes a YouTube video using Gemini based on its transcript text.
+     * The transcript is fetched separately and passed here for analysis.
      */
-    async analyzeVideo(videoUrl: string, sourceId: string): Promise<SourceAnalysis> {
+    async analyzeVideo(videoUrl: string, sourceId: string, transcriptText?: string): Promise<SourceAnalysis> {
         const startTime = Date.now();
 
         const prompt = `You are an expert instructional designer analyzing video content for lesson plan creation.
 
-Analyze this YouTube video and provide a structured analysis in JSON format:
+Analyze the following YouTube video transcript and provide a structured analysis in JSON format:
 
 {
   "summary": "Comprehensive summary of the video content (2-3 paragraphs)",
@@ -39,7 +39,7 @@ Analyze this YouTube video and provide a structured analysis in JSON format:
     }
   ],
   "transcript": "Key dialogue and narration from the video",
-  "visualElements": ["Notable visual elements, diagrams, demonstrations"],
+  "visualElements": ["Notable visual elements, diagrams, demonstrations mentioned in transcript"],
   "estimatedDifficultyLevel": "beginner/intermediate/advanced",
   "prerequisites": ["What learners should already know"],
   "suggestedDuration": "Estimated teaching time for this content"
@@ -48,10 +48,16 @@ Analyze this YouTube video and provide a structured analysis in JSON format:
 Focus on educational value and how this content can be transformed into structured learning activities compliant with IATA training standards. Respond ONLY with valid JSON.`;
 
         try {
-            const result = await this.model.generateContent([
+            const contentParts = [
                 { text: prompt },
                 { text: `YouTube Video URL: ${videoUrl}` },
-            ]);
+            ];
+
+            if (transcriptText) {
+                contentParts.push({ text: `\n\nVideo Transcript:\n${transcriptText}` });
+            }
+
+            const result = await this.model.generateContent(contentParts);
 
             const response = result.response;
             const text = response.text();

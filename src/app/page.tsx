@@ -1,11 +1,31 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { SourceInput } from '@/components/sources/SourceInput';
+import { CollectionBuilder } from '@/components/collections/CollectionBuilder';
+import { createClient } from '@/lib/supabase/client';
+import type { User } from '@supabase/supabase-js';
 
 export default function HomePage() {
     const router = useRouter();
+    const [user, setUser] = useState<User | null>(null);
+
+    useEffect(() => {
+        const supabase = createClient();
+        supabase.auth.getUser().then(({ data: { user } }) => setUser(user));
+
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(
+            (_event, session) => setUser(session?.user ?? null)
+        );
+        return () => subscription.unsubscribe();
+    }, []);
+
+    const handleSignOut = async () => {
+        const supabase = createClient();
+        await supabase.auth.signOut();
+        setUser(null);
+    };
 
     const handleLessonGenerated = (courseId: string) => {
         router.push(`/courses/${courseId}`);
@@ -24,12 +44,24 @@ export default function HomePage() {
                             Learning Production Engine
                         </span>
                     </div>
-                    <a
-                        href="/auth/login"
-                        className="text-sm text-gray-600 hover:text-primary-600 transition-colors"
-                    >
-                        Sign In
-                    </a>
+                    {user ? (
+                        <div className="flex items-center gap-3">
+                            <span className="text-sm text-gray-500">{user.email}</span>
+                            <button
+                                onClick={handleSignOut}
+                                className="text-sm text-gray-600 hover:text-red-600 transition-colors"
+                            >
+                                Sign Out
+                            </button>
+                        </div>
+                    ) : (
+                        <a
+                            href="/auth/login"
+                            className="text-sm text-gray-600 hover:text-primary-600 transition-colors"
+                        >
+                            Sign In
+                        </a>
+                    )}
                 </div>
             </nav>
 
@@ -53,8 +85,14 @@ export default function HomePage() {
                             content and generates structured, IATA-compliant lesson plans in
                             under 5 minutes.
                         </p>
-                        <div className="mt-10">
+                        <div className="mt-10 flex flex-col items-center gap-4">
                             <SourceInput onLessonGenerated={handleLessonGenerated} />
+                            <div className="flex items-center gap-3 text-sm text-gray-400">
+                                <span className="h-px w-8 bg-gray-200" />
+                                or
+                                <span className="h-px w-8 bg-gray-200" />
+                            </div>
+                            <CollectionBuilder onCourseGenerated={handleLessonGenerated} />
                         </div>
                     </div>
                 </div>

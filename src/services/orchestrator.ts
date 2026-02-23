@@ -35,54 +35,81 @@ export class PipelineOrchestrator {
         fileBuffer?: Buffer,
         fileName?: string
     ): Promise<{ courseId: string; lesson: GeneratedLesson }> {
+        console.log('[Pipeline] ====== STARTING PIPELINE ======');
+        console.log('[Pipeline] sourceUrl:', sourceUrl);
+        console.log('[Pipeline] sourceType:', sourceType);
+        console.log('[Pipeline] organizationId:', organizationId);
+
         // Step 1: Create source record
+        console.log('[Pipeline] Step 1: Creating source record...');
         onStatus?.('Creating source record...');
         const source = await this.createSource(sourceUrl, sourceType, organizationId);
+        console.log('[Pipeline] Step 1 DONE — source.id:', source.id);
 
         try {
             // Step 2: Update status to processing
+            console.log('[Pipeline] Step 2: Updating status to processing...');
             await this.updateSourceStatus(source.id, 'processing');
+            console.log('[Pipeline] Step 2 DONE');
 
             // Step 3: Analyze content
+            console.log('[Pipeline] Step 3: Analyzing content...');
             onStatus?.('Analyzing content with Gemini AI...');
             const analysis = await this.analyzeSource(source.id, sourceUrl, sourceType, fileBuffer, fileName);
+            console.log('[Pipeline] Step 3 DONE — analysis keys:', Object.keys(analysis));
 
             // Step 4: Save analysis
+            console.log('[Pipeline] Step 4: Saving analysis...');
             onStatus?.('Saving analysis results...');
             await this.saveAnalysis(source.id, analysis);
+            console.log('[Pipeline] Step 4 DONE');
 
             // Step 5: Generate lesson 
+            console.log('[Pipeline] Step 5: Generating lesson with Claude...');
             onStatus?.('Generating IATA-compliant lesson plan with Claude...');
             const title = await this.getSourceTitle(source.id);
+            console.log('[Pipeline] Step 5a: Got title:', title);
             const lesson = await this.claudeLesson.generateLesson(
                 analysis.analysisData,
                 title
             );
+            console.log('[Pipeline] Step 5 DONE — lesson.course.title:', lesson?.course?.title);
 
             // Step 6: Save to database
+            console.log('[Pipeline] Step 6: Saving lesson to DB...');
             onStatus?.('Saving lesson plan...');
             const courseId = await this.saveLesson(lesson, source.id, organizationId);
+            console.log('[Pipeline] Step 6 DONE — courseId:', courseId);
 
             // Step 7: Create NotebookLM notebook
+            console.log('[Pipeline] Step 7: Creating NotebookLM notebook...');
             onStatus?.('Preparing NotebookLM notebook...');
             try {
                 await this.notebookLM.createNotebookForCourse(
                     { id: courseId, title: lesson.course.title, description: lesson.course.description },
-                    analysis,
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    analysis as any,
                     sourceUrl,
                     sourceType
                 );
+                console.log('[Pipeline] Step 7 DONE');
             } catch (nbError) {
                 // Non-fatal — log and continue
                 console.error('[Pipeline] NotebookLM creation failed (non-fatal):', nbError);
             }
 
             // Step 8: Mark complete
+            console.log('[Pipeline] Step 8: Marking complete...');
             await this.updateSourceStatus(source.id, 'completed');
             onStatus?.('Complete!');
+            console.log('[Pipeline] ====== PIPELINE COMPLETE ======');
 
             return { courseId, lesson };
         } catch (error) {
+            console.error('[Pipeline] ====== PIPELINE FAILED ======');
+            console.error('[Pipeline] Error:', error);
+            console.error('[Pipeline] Error message:', error instanceof Error ? error.message : JSON.stringify(error));
+            console.error('[Pipeline] Error stack:', error instanceof Error ? error.stack : 'N/A');
             await this.updateSourceStatus(source.id, 'failed');
             throw error;
         }
@@ -99,24 +126,32 @@ export class PipelineOrchestrator {
             try {
                 const metadata = await YouTubeService.getMetadata(sourceUrl);
                 title = metadata.title;
-            } catch {
-                // Fallback to URL
+                console.log('[Pipeline] Got YouTube title:', title);
+            } catch (ytErr) {
+                console.warn('[Pipeline] YouTube metadata fetch failed, using URL as title:', ytErr);
             }
         }
 
+        const insertPayload = {
+            organization_id: organizationId,
+            source_type: sourceType,
+            source_url: sourceUrl,
+            title,
+            status: 'pending',
+        };
+        console.log('[Pipeline] Inserting source with payload:', JSON.stringify(insertPayload));
+
         const { data, error } = await this.supabase
             .from('sources')
-            .insert({
-                organization_id: organizationId,
-                source_type: sourceType,
-                source_url: sourceUrl,
-                title,
-                status: 'pending',
-            })
+            .insert(insertPayload)
             .select()
             .single();
 
-        if (error) throw new Error(`Failed to create source: ${error.message}`);
+        if (error) {
+            console.error('[Pipeline] createSource DB error:', JSON.stringify(error));
+            throw new Error(`Failed to create source: ${error.message}`);
+        }
+        console.log('[Pipeline] createSource success, id:', data.id);
         return data;
     }
 
