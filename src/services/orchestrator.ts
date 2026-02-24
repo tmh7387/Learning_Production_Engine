@@ -1,7 +1,5 @@
 import { createServiceClient } from '@/lib/supabase/server';
-import { GeminiVideoService } from '@/services/gemini/videoAnalysis';
-import { GeminiDocumentService } from '@/services/gemini/documentAnalysis';
-import { ClaudeLessonService } from '@/services/claude/lessonGeneration';
+import { OpenRouterService } from '@/services/ai/openrouterService';
 import { NotebookLMService } from '@/services/notebooklm/notebookService';
 import { YouTubeService } from '@/services/sources/youtube';
 import { GeneratedLesson } from '@/types/lessons';
@@ -11,16 +9,12 @@ type StatusCallback = (status: string) => void;
 
 export class PipelineOrchestrator {
     private supabase;
-    private geminiVideo: GeminiVideoService;
-    private geminiDocument: GeminiDocumentService;
-    private claudeLesson: ClaudeLessonService;
+    private ai: OpenRouterService;
     private notebookLM: NotebookLMService;
 
     constructor() {
         this.supabase = createServiceClient();
-        this.geminiVideo = new GeminiVideoService();
-        this.geminiDocument = new GeminiDocumentService();
-        this.claudeLesson = new ClaudeLessonService();
+        this.ai = new OpenRouterService();
         this.notebookLM = new NotebookLMService();
     }
 
@@ -65,11 +59,11 @@ export class PipelineOrchestrator {
             console.log('[Pipeline] Step 4 DONE');
 
             // Step 5: Generate lesson 
-            console.log('[Pipeline] Step 5: Generating lesson with Claude...');
-            onStatus?.('Generating IATA-compliant lesson plan with Claude...');
+            console.log('[Pipeline] Step 5: Generating lesson with OpenRouter...');
+            onStatus?.('Generating IATA-compliant lesson plan with OpenRouter...');
             const title = await this.getSourceTitle(source.id);
             console.log('[Pipeline] Step 5a: Got title:', title);
-            const lesson = await this.claudeLesson.generateLesson(
+            const lesson = await this.ai.generateLesson(
                 analysis.analysisData,
                 title
             );
@@ -164,7 +158,9 @@ export class PipelineOrchestrator {
     ): Promise<SourceAnalysis> {
         if (sourceType === 'youtube') {
             const videoUrl = YouTubeService.getVideoUrl(sourceUrl);
-            return this.geminiVideo.analyzeVideo(videoUrl, sourceId);
+            // We'll need to fetch the transcript if we want high-quality analysis
+            // For now, let's pass a placeholder or implement transcript fetching if possible
+            return this.ai.analyzeVideo(videoUrl, sourceId);
         }
 
         if (!fileBuffer || !fileName) {
@@ -176,7 +172,7 @@ export class PipelineOrchestrator {
                 ? 'application/pdf'
                 : 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
 
-        return this.geminiDocument.analyzeDocument(fileBuffer, fileName, mimeType, sourceId);
+        return this.ai.analyzeDocument(fileBuffer, fileName, mimeType, sourceId);
     }
 
     private async saveAnalysis(sourceId: string, analysis: SourceAnalysis): Promise<void> {
